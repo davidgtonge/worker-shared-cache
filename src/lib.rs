@@ -1,10 +1,11 @@
 //! A byte-bounded cache per name, shared by every Node worker thread in the process.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use napi::bindgen_prelude::Buffer;
+use napi::Env;
+use napi::bindgen_prelude::{Buffer, BufferSlice};
 use napi_derive::napi;
 use quick_cache::{Weighter, sync::Cache};
 
@@ -24,11 +25,28 @@ impl Weighter<String, Bytes> for Weigh {
     }
 }
 
+/// Hit and miss counts for the threads that map to one slot, padded to its own cache line so threads
+/// counting in different slots don't stall each other.
+#[derive(Default)]
+#[repr(align(128))]
+struct Counts {
+    hits: AtomicU64,
+    misses: AtomicU64,
+}
+
+const SLOTS: usize = 64;
+
+thread_local! {
+    static SLOT: usize = {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        NEXT.fetch_add(1, Relaxed) % SLOTS
+    };
+}
+
 struct Shared {
     cache: Cache<String, Bytes, Weigh>,
     max_bytes: u64,
-    hits: AtomicU64,
-    misses: AtomicU64,
+    counts: [Counts; SLOTS],
 }
 
 static CACHES: OnceLock<Mutex<HashMap<String, Arc<Shared>>>> = OnceLock::new();
@@ -58,7 +76,7 @@ pub fn open_cache(name: String, max_bytes: f64) -> napi::Result<SharedCache> {
     }
     // The first argument only sizes the hash table: guess 1 KB entries.
     let cache = Cache::with_weighter((max_bytes / 1024).max(16) as usize, max_bytes, Weigh);
-    let shared = Arc::new(Shared { cache, max_bytes, hits: AtomicU64::new(0), misses: AtomicU64::new(0) });
+    let shared = Arc::new(Shared { cache, max_bytes, counts: std::array::from_fn(|_| Counts::default()) });
     caches.insert(name, shared.clone());
     Ok(SharedCache(shared))
 }
@@ -67,14 +85,17 @@ pub fn open_cache(name: String, max_bytes: f64) -> napi::Result<SharedCache> {
 impl SharedCache {
     fn lookup(&self, key: &str) -> Option<Bytes> {
         let found = self.0.cache.get(key);
-        let count = if found.is_some() { &self.0.hits } else { &self.0.misses };
+        let counts = &self.0.counts[SLOT.with(|slot| *slot)];
+        let count = if found.is_some() { &counts.hits } else { &counts.misses };
         count.fetch_add(1, Relaxed);
         found
     }
 
+    // Returning a Buffer made from a Rust Vec registers a finalizer per call, which costs more than the
+    // lookup itself; copying into memory Node allocates does not.
     #[napi]
-    pub fn get(&self, key: String) -> Option<Buffer> {
-        self.lookup(&key).map(|bytes| bytes.to_vec().into())
+    pub fn get<'env>(&self, env: &'env Env, key: String) -> napi::Result<Option<BufferSlice<'env>>> {
+        self.lookup(&key).map(|bytes| BufferSlice::copy_from(env, bytes)).transpose()
     }
 
     #[napi]
@@ -84,7 +105,7 @@ impl SharedCache {
 
     /// One Buffer for the whole batch: per key a u32 LE length (u32::MAX for a miss), then the bytes.
     #[napi]
-    pub fn get_packed(&self, keys: Vec<String>) -> Buffer {
+    pub fn get_packed<'env>(&self, env: &'env Env, keys: Vec<String>) -> napi::Result<BufferSlice<'env>> {
         let mut out = Vec::new();
         for key in &keys {
             match self.lookup(key) {
@@ -95,17 +116,18 @@ impl SharedCache {
                 None => out.extend_from_slice(&u32::MAX.to_le_bytes()),
             }
         }
-        out.into()
+        BufferSlice::copy_from(env, out)
     }
 
     #[napi]
     pub fn stats(&self) -> Stats {
         let cache = &self.0.cache;
+        let sum = |pick: fn(&Counts) -> &AtomicU64| self.0.counts.iter().map(|c| pick(c).load(Relaxed)).sum::<u64>();
         Stats {
             entries: cache.len() as f64,
             bytes: cache.weight() as f64,
-            hits: self.0.hits.load(Relaxed) as f64,
-            misses: self.0.misses.load(Relaxed) as f64,
+            hits: sum(|c| &c.hits) as f64,
+            misses: sum(|c| &c.misses) as f64,
         }
     }
 }

@@ -15,6 +15,7 @@ const BATCH = 64
 const MAX_BYTES = 512 * 1024 * 1024
 
 const keys = Array.from({ length: KEYS }, (_, i) => `key:${i}`)
+const absent = keys.map((k) => `absent:${k}`) // spread over the cache's shards like real misses
 const value = Buffer.alloc(VALUE_BYTES, 7)
 
 // Results land here so V8 can't drop calls whose value is unused.
@@ -46,13 +47,14 @@ function singleThread() {
   const map = new Map(keys.map((k) => [k, Buffer.from(value)]))
   let i = 0
   const next = () => keys[i++ % KEYS]
+  const nextAbsent = () => absent[i++ % KEYS]
   const batch = () => Array.from({ length: BATCH }, next)
 
   const rows = [
     ['Map.get (baseline)', measure(() => use(map.get(next())))],
     ['Map.get + copy', measure(() => use(Buffer.from(map.get(next()))))],
     ['cache.get (hit)', measure(() => use(cache.get(next())))],
-    ['cache.get (miss)', measure(() => use(cache.get('nope')))],
+    ['cache.get (miss)', measure(() => use(cache.get(nextAbsent())))],
     ['cache.set', measure(() => (cache.set(next(), value), 1))],
     [`cache.getPacked x${BATCH}`, measure(() => (use(cache.getPacked(batch())), BATCH))],
     [`cache.get x${BATCH} (loop)`, measure(() => { for (let j = 0; j < BATCH; j++) use(cache.get(next())); return BATCH })],
@@ -100,9 +102,10 @@ if (isMainThread) {
   const cache = openCache('bench-workers', MAX_BYTES)
   let i = workerData.id * 7919
   const next = () => keys[i++ % KEYS]
+  const nextAbsent = () => absent[i++ % KEYS]
   const run = {
     get: () => use(cache.get(next())),
-    miss: () => use(cache.get('nope')),
+    miss: () => use(cache.get(nextAbsent())),
     mixed: () => (i % 10 === 0 ? (cache.set(next(), value), 1) : use(cache.get(next()))),
   }[workerData.mode]
   const rate = measure(run)
