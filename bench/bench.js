@@ -38,7 +38,7 @@ function measure(fn) {
 }
 
 function fill(cache) {
-  for (const k of keys) cache.set(k, value)
+  for (const k of keys) cache.setBuffer(k, value)
 }
 
 function singleThread() {
@@ -53,11 +53,11 @@ function singleThread() {
   const rows = [
     ['Map.get (baseline)', measure(() => use(map.get(next())))],
     ['Map.get + copy', measure(() => use(Buffer.from(map.get(next()))))],
-    ['cache.get (hit)', measure(() => use(cache.get(next())))],
-    ['cache.get (miss)', measure(() => use(cache.get(nextAbsent())))],
-    ['cache.set', measure(() => (cache.set(next(), value), 1))],
+    ['cache.getBuffer (hit)', measure(() => use(cache.getBuffer(next())))],
+    ['cache.getBuffer (miss)', measure(() => use(cache.getBuffer(nextAbsent())))],
+    ['cache.setBuffer', measure(() => (cache.setBuffer(next(), value), 1))],
     [`cache.getPacked x${BATCH}`, measure(() => (use(cache.getPacked(batch())), BATCH))],
-    [`cache.get x${BATCH} (loop)`, measure(() => { for (let j = 0; j < BATCH; j++) use(cache.get(next())); return BATCH })],
+    [`cache.getBuffer x${BATCH} (loop)`, measure(() => { for (let j = 0; j < BATCH; j++) use(cache.getBuffer(next())); return BATCH })],
   ]
   return rows
 }
@@ -104,9 +104,9 @@ if (isMainThread) {
   const next = () => keys[i++ % KEYS]
   const nextAbsent = () => absent[i++ % KEYS]
   const run = {
-    get: () => use(cache.get(next())),
-    miss: () => use(cache.get(nextAbsent())),
-    mixed: () => (i % 10 === 0 ? (cache.set(next(), value), 1) : use(cache.get(next()))),
+    get: () => use(cache.getBuffer(next())),
+    miss: () => use(cache.getBuffer(nextAbsent())),
+    mixed: () => (i % 10 === 0 ? (cache.setBuffer(next(), value), 1) : use(cache.getBuffer(next()))),
   }[workerData.mode]
   const rate = measure(run)
   parentPort.postMessage(rate)

@@ -56,17 +56,26 @@ console.log(`sample: ${JSON.stringify(objects[1])}\n`)
 for (const [name, { encode, decode }] of Object.entries(codecs)) {
   const encoded = objects.map(encode)
   const cache = openCache(`serialize-${name}`, 64 * 1024 * 1024)
-  keys.forEach((k, i) => cache.set(k, encoded[i]))
+  keys.forEach((k, i) => cache.setBuffer(k, encoded[i]))
   const avg = encoded.reduce((s, b) => s + b.length, 0) / N
 
   console.log(`${name} (${avg.toFixed(0)} bytes per object)`)
   const rows = [
     ['encode', (i) => encode(objects[i])],
     ['decode', (i) => decode(encoded[i])],
-    ['encode + cache.set', (i) => (cache.set(keys[i], encode(objects[i])), 1)],
-    ['cache.get + decode', (i) => decode(cache.get(keys[i]))],
+    ['encode + setBuffer', (i) => (cache.setBuffer(keys[i], encode(objects[i])), 1)],
+    ['getBuffer + decode', (i) => decode(cache.getBuffer(keys[i]))],
   ]
   for (const [label, fn] of rows) console.log(`  ${label.padEnd(20)} ${fmt(measure(fn))}`)
   console.log()
+}
+
+// The built-in JSON path: set/get pass strings to the native side, so no Buffer is made at all.
+{
+  const cache = openCache('serialize-builtin', 64 * 1024 * 1024)
+  keys.forEach((k, i) => cache.set(k, objects[i]))
+  console.log('built-in cache.set / cache.get (JSON via strings)')
+  console.log(`  ${'cache.set'.padEnd(20)} ${fmt(measure((i) => (cache.set(keys[i], objects[i]), 1)))}`)
+  console.log(`  ${'cache.get'.padEnd(20)} ${fmt(measure((i) => cache.get(keys[i])))}`)
 }
 if (sink === 42) console.log('')

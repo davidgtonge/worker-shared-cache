@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering::Relaxed};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use napi::Env;
+use napi::{Env, JsString};
 use napi::bindgen_prelude::{Buffer, BufferSlice};
 use napi_derive::napi;
 use quick_cache::{Weighter, sync::Cache};
@@ -94,13 +94,27 @@ impl SharedCache {
     // Returning a Buffer made from a Rust Vec registers a finalizer per call, which costs more than the
     // lookup itself; copying into memory Node allocates does not.
     #[napi]
-    pub fn get<'env>(&self, env: &'env Env, key: String) -> napi::Result<Option<BufferSlice<'env>>> {
+    pub fn get_buffer<'env>(&self, env: &'env Env, key: String) -> napi::Result<Option<BufferSlice<'env>>> {
         self.lookup(&key).map(|bytes| BufferSlice::copy_from(env, bytes)).transpose()
     }
 
     #[napi]
-    pub fn set(&self, key: String, value: Buffer) {
+    pub fn set_buffer(&self, key: String, value: Buffer) {
         self.0.cache.insert(key, Arc::from(value.as_ref()));
+    }
+
+    /// Reads the value as UTF-8 straight into a JS string, skipping the Buffer a caller would decode.
+    #[napi]
+    pub fn get_string<'env>(&self, env: &'env Env, key: String) -> napi::Result<Option<JsString<'env>>> {
+        let Some(bytes) = self.lookup(&key) else { return Ok(None) };
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| napi::Error::from_reason(format!("value for '{key}' is not UTF-8")))?;
+        env.create_string(text).map(Some)
+    }
+
+    #[napi]
+    pub fn set_string(&self, key: String, value: String) {
+        self.0.cache.insert(key, Arc::from(value.into_bytes()));
     }
 
     /// One Buffer for the whole batch: per key a u32 LE length (u32::MAX for a miss), then the bytes.
