@@ -25,3 +25,6 @@ napi-build = "2"
 lto = true
 codegen-units = 1
 strip = "symbols"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

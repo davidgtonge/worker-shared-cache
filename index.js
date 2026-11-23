@@ -2,10 +2,14 @@
 
 const native = require('./binding.js')
 
-/** A named cache shared by every worker thread in the process. See index.d.ts for the API. */
+/**
+ * A named cache shared by every worker thread in the process. Values go in either as JSON (`get`/`set`)
+ * or as raw bytes (`getBuffer`/`setBuffer`); both read and write the same entries. Types: index.d.ts.
+ */
 class SharedCache {
   #native
 
+  /** @param {import('./binding').NativeCache} cache */
   constructor(cache) {
     this.#native = cache
   }
@@ -17,8 +21,10 @@ class SharedCache {
 
   set(key, value) {
     const text = JSON.stringify(value)
-    if (text === undefined) throw new TypeError(`cannot store ${typeof value} under '${key}': it has no JSON form`)
-    this.#native.setString(key, text)
+    if (text === undefined) {
+      throw new TypeError(`cannot cache ${typeof value} under '${key}': it has no JSON form`)
+    }
+    if (!this.#native.setString(key, text)) this.#tooLarge(key, Buffer.byteLength(text))
   }
 
   getBuffer(key) {
@@ -29,7 +35,7 @@ class SharedCache {
     if (!ArrayBuffer.isView(value)) {
       throw new TypeError(`setBuffer expects a Buffer, typed array or DataView for '${key}'`)
     }
-    this.#native.setBuffer(key, value)
+    if (!this.#native.setBuffer(key, value)) this.#tooLarge(key, value.byteLength)
   }
 
   getPacked(keys) {
@@ -39,10 +45,26 @@ class SharedCache {
   stats() {
     return this.#native.stats()
   }
+
+  get maxEntryBytes() {
+    return this.#native.maxEntryBytes
+  }
+
+  get shards() {
+    return this.#native.shards
+  }
+
+  #tooLarge(key, valueBytes) {
+    const bytes = Buffer.byteLength(key) + valueBytes
+    throw new RangeError(
+      `cannot cache '${key}': ${bytes} bytes (key + value) is over this cache's maxEntryBytes of ` +
+        `${this.maxEntryBytes}. Raise maxBytes or lower shards to allow bigger entries.`,
+    )
+  }
 }
 
-function openCache(name, maxBytes) {
-  return new SharedCache(native.openCache(name, maxBytes))
+function openCache(name, maxBytes, options) {
+  return new SharedCache(native.openCache(name, maxBytes, options))
 }
 
 module.exports = { openCache, SharedCache }

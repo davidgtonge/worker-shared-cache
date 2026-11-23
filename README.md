@@ -24,7 +24,33 @@ cache.stats() // { entries, bytes, hits, misses }
 ```
 
 Calling `openCache` with the same name from any thread returns the same cache. Reopening it with a
-different `maxBytes` throws.
+different `maxBytes` or options throws.
+
+### Options
+
+```js
+openCache('images', 512 * 1024 * 1024, {
+  shards: 8,                 // default: CPU count × 4, rounded up to a power of two
+  hotAllocation: 0.97,       // default: 0.97
+  estimatedEntryBytes: 64e3, // default: 1024; only sizes internal tables
+})
+```
+
+### Eviction
+
+Eviction follows [S3-FIFO](https://s3fifo.com), via [`quick_cache`](https://crates.io/crates/quick_cache),
+rather than LRU. A new key first sits in a small probation area and is evicted early unless it is read
+again; keys that are read again move to the main area (`hotAllocation` of the space). The cache also
+remembers recently evicted keys and readmits them straight to the main area. Hit rates are as good as LRU's
+or better, and a one-off scan over many keys can't flush out the entries you use often.
+
+### Entry size limit
+
+To let threads work in parallel, the cache is split into `shards` parts that each hold an equal share of
+`maxBytes`. One entry (key + value) can't be bigger than a part, so the limit is about `maxBytes / shards`;
+`cache.maxEntryBytes` gives the exact figure. `set` and `setBuffer` throw a `RangeError` for a bigger entry
+and drop any older value under that key. If you cache large values, pass fewer `shards`: the default of
+64 on a 16-core machine limits a 64 MB cache to entries of about 1 MB.
 
 ### JSON or raw bytes
 
@@ -78,7 +104,19 @@ worker threads for get hits, get misses, and a 90/10 get/set mix.
 npm install
 npm run build   # release build of the native addon for this platform
 npm test
+npm run lint    # rustfmt, clippy (pedantic, warnings as errors) and a type check of index.d.ts
 ```
+
+| Path | What it holds |
+|---|---|
+| `index.js`, `index.d.ts` | The public API: JSON and raw views over the native cache, plus argument checks |
+| `binding.js`, `binding.d.ts` | The loader napi-rs generates for the native addon (`npm run build` rewrites them) |
+| `src/bindings.rs` | The napi surface `index.js` calls |
+| `src/config.rs` | Option validation and defaults |
+| `src/store.rs` | One cache: lookups, the per-entry size limit, stats |
+| `src/counters.rs` | Hit and miss counts that threads bump without contending |
+| `src/registry.rs` | The process-wide map from cache name to store |
+| `test/`, `bench/` | `node:test` suites and throughput benchmarks |
 
 ## License
 

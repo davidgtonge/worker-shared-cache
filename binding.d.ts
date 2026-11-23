@@ -9,19 +9,28 @@
  */
 export declare const __napiBindingTarget: 'native' | 'wasm32-wasi' | 'wasm32-wasip1'
 
-export declare class SharedCache {
+export declare class NativeCache {
   getBuffer(key: string): Buffer | null
-  setBuffer(key: string, value: Buffer): void
-  /** Reads the value as UTF-8 straight into a JS string, skipping the Buffer a caller would decode. */
+  /** Returns `false`, storing nothing, when the entry is over `maxEntryBytes`. */
+  setBuffer(key: string, value: Buffer): boolean
+  /** Reads the value as UTF-8 straight into a JS string, with no Buffer in between. */
   getString(key: string): string | null
-  setString(key: string, value: string): void
-  /** One Buffer for the whole batch: per key a u32 LE length (u32::MAX for a miss), then the bytes. */
+  /** Returns `false`, storing nothing, when the entry is over `maxEntryBytes`. */
+  setString(key: string, value: string): boolean
+  /** One Buffer for the whole batch: per key a u32 LE length (`u32::MAX` for a miss), then the bytes. */
   getPacked(keys: Array<string>): Buffer
   stats(): Stats
+  get maxEntryBytes(): number
+  get shards(): number
 }
 
-/** Opens the named cache, creating it on first use. Reopening with another size throws. */
-export declare function openCache(name: string, maxBytes: number): SharedCache
+export interface CacheOptions {
+  shards?: number
+  hotAllocation?: number
+  estimatedEntryBytes?: number
+}
+
+export declare function openCache(name: string, maxBytes: number, options?: CacheOptions | undefined | null): NativeCache
 
 export interface Stats {
   entries: number

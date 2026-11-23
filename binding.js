@@ -835,5 +835,5 @@ function __napiStampBindingTarget(exportsObject, target) {
 // linked import resolves to `undefined`.
 module.exports.__napiBindingTarget = __napiStampBindingTarget(nativeBinding, __napiLoadedBindingTarget)
 module.exports = nativeBinding
-module.exports.SharedCache = nativeBinding.SharedCache
+module.exports.NativeCache = nativeBinding.NativeCache
 module.exports.openCache = nativeBinding.openCache
