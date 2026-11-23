@@ -46,6 +46,16 @@ function unpack(buf) {
 - Values are copied in on `set` and out on `get`; the cache never hands JS a view of its own memory.
 - On Linux the addon uses mimalloc, since musl's allocator slows badly when many threads allocate at once.
 
+## Benchmarks
+
+```sh
+npm run bench                              # 1 KB values, 10k keys, 1s per case
+node bench/bench.js --value-bytes=64 --keys=100000 --seconds=2
+```
+
+This prints single-thread throughput next to a plain `Map` baseline, then the combined throughput of 1..N
+worker threads for get hits, get misses, and a 90/10 get/set mix.
+
 ## Development
 
 ```sh
