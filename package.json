@@ -7,7 +7,11 @@
   "repository": "github:davidgtonge/node-shared-cache",
   "main": "index.js",
   "types": "index.d.ts",
-  "files": ["index.js", "index.d.ts", "*.node"],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
   "napi": {
     "binaryName": "node-shared-cache",
     "targets": [
@@ -20,12 +24,15 @@
       "x86_64-pc-windows-msvc"
     ]
   },
-  "engines": { "node": ">= 18" },
+  "engines": {
+    "node": ">= 18"
+  },
   "scripts": {
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
     "test": "node --test test/*.test.js",
-    "bench": "node bench/bench.js"
+    "bench": "node bench/bench.js",
+    "bench:serialize": "node bench/serialize.js"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.4.0"
