@@ -44,6 +44,25 @@ test('getPacked returns lengths, bytes and misses', () => {
   assert.equal(z.length, 0)
 })
 
+test('getPacked of no keys is an empty Buffer', () => {
+  assert.equal(openCache('packed-empty', MB).getPacked([]).length, 0)
+})
+
+test('getPacked keeps large values intact and in key order', () => {
+  const cache = openCache('packed-large', 64 * MB, { shards: 4 })
+  const sizes = [0, 1, 300_000, 65_536, 1_000_000]
+  sizes.forEach((n, i) => cache.setBuffer(`big${i}`, Buffer.alloc(n, i + 1)))
+  const keys = sizes.flatMap((_, i) => [`big${i}`, `absent${i}`])
+  const values = unpack(cache.getPacked(keys))
+  assert.equal(values.length, keys.length)
+  sizes.forEach((n, i) => {
+    const value = values[2 * i]
+    assert.equal(value.length, n)
+    assert.ok(value.every((byte) => byte === i + 1), `big${i} holds only byte ${i + 1}`)
+    assert.equal(values[2 * i + 1], undefined)
+  })
+})
+
 test('stats count hits and misses across methods', () => {
   const cache = openCache('stats', MB)
   cache.setBuffer('a', Buffer.from('hello'))
