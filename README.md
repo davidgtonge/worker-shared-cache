@@ -21,6 +21,9 @@ Prebuilt binaries ship for these platforms, and npm installs only the one matchi
 | Alpine and other musl Linux, x64 / arm64 (including AWS Graviton) | `-linux-x64-musl`, `-linux-arm64-musl` |
 | Windows x64 | `-win32-x64-msvc` |
 
+TypeScript types are included: `SharedCache`, `CacheOptions` and `Stats`, with `get<T>()` for typed reads.
+They work from CommonJS and ESM, under every TypeScript module setting, with TypeScript 5 and 7.
+
 ## Usage
 
 ```js
@@ -132,6 +135,8 @@ npm run build     # release build of the native addon for this platform, then ts
 npm test
 npm run lint      # rustfmt, clippy (pedantic, warnings as errors) and a strict tsc type check
 npm run coverage  # JS coverage (fails below 100%) and Rust coverage of an instrumented build
+npm run check:types       # pack, then check the types with Are the Types Wrong and a TypeScript 5 consumer
+npm run check:types -- 7  # the same with TypeScript 7
 ```
 
 `npm run coverage` needs `cargo install cargo-llvm-cov` and `rustup component add llvm-tools`. JS is at 100%,

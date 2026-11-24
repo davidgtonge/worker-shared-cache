@@ -1,3 +1,7 @@
+/// <reference types="node" preserve="true" />
+// The declarations use Node's Buffer; this keeps the reference in lib/index.d.ts (preserve="true", since
+// TypeScript 5.5) so @types/node loads even for projects that limit `types`.
+
 import { openCache as openNativeCache, type NativeCache } from './binding.js'
 
 export interface CacheOptions {
@@ -36,10 +40,12 @@ const OPTIONS: readonly string[] = ['shards', 'hotAllocation', 'estimatedEntryBy
  * {@link openCache}.
  */
 export class SharedCache {
-  readonly #native: NativeCache
+  // TypeScript `private`, not a `#native` field: `#` members appear in the declarations as `#private`,
+  // which TypeScript 5 rejects in projects targeting ES5 (its default) unless they set skipLibCheck.
+  private readonly native: NativeCache
 
   private constructor(cache: NativeCache) {
-    this.#native = cache
+    this.native = cache
   }
 
   /** @internal Used by {@link openCache}; not part of the public API. */
@@ -52,7 +58,7 @@ export class SharedCache {
     checkKey(key)
     // Reads as a string, not a Buffer: JSON.parse needs a string, and the native side makes one straight
     // from the cached bytes, ~3.5x faster than getBuffer(key).toString(). See native/src/bindings.rs.
-    const text = this.#native.getString(key)
+    const text = this.native.getString(key)
     return text === null ? undefined : (JSON.parse(text) as T)
   }
 
@@ -68,7 +74,7 @@ export class SharedCache {
       throw new TypeError(`cannot cache ${typeof value} under '${key}': it has no JSON form`)
     }
     const bytes = Buffer.from(text)
-    if (!this.#native.setBuffer(key, bytes)) this.#tooLarge(key, bytes.length)
+    if (!this.native.setBuffer(key, bytes)) this.tooLarge(key, bytes.length)
   }
 
   /**
@@ -77,7 +83,7 @@ export class SharedCache {
    */
   getBuffer(key: string): Buffer | undefined {
     checkKey(key)
-    return this.#native.getBuffer(key) ?? undefined
+    return this.native.getBuffer(key) ?? undefined
   }
 
   /** Stores a copy of the bytes. Throws a RangeError when the entry is over `maxEntryBytes`. */
@@ -87,24 +93,24 @@ export class SharedCache {
       throw new TypeError(`setBuffer expects a Buffer, typed array or DataView for '${key}'`)
     }
     // The native side reads any ArrayBufferView's bytes, though napi types the parameter as Buffer.
-    if (!this.#native.setBuffer(key, value as Buffer)) this.#tooLarge(key, value.byteLength)
+    if (!this.native.setBuffer(key, value as Buffer)) this.tooLarge(key, value.byteLength)
   }
 
   stats(): Stats {
-    return this.#native.stats()
+    return this.native.stats()
   }
 
   /** The largest key + value, in bytes, this cache accepts: about `maxBytes / shards`. */
   get maxEntryBytes(): number {
-    return this.#native.maxEntryBytes
+    return this.native.maxEntryBytes
   }
 
   /** The number of shards in use, after rounding. */
   get shards(): number {
-    return this.#native.shards
+    return this.native.shards
   }
 
-  #tooLarge(key: string, valueBytes: number): never {
+  private tooLarge(key: string, valueBytes: number): never {
     const bytes = Buffer.byteLength(key) + valueBytes
     throw new RangeError(
       `cannot cache '${key}': ${bytes} bytes (key + value) is over this cache's maxEntryBytes of ` +
