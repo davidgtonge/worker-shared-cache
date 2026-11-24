@@ -10,7 +10,6 @@ const arg = (name, def) => (flag(name) === undefined ? def : Number(flag(name)))
 const VALUE_BYTES = arg('value-bytes', 1024)
 const KEYS = arg('keys', 10_000)
 const SECONDS = arg('seconds', 1)
-const BATCH = 64
 const MAX_BYTES = 512 * 1024 * 1024
 
 const keys = Array.from({ length: KEYS }, (_, i) => `key:${i}`)
@@ -47,7 +46,6 @@ function singleThread() {
   let i = 0
   const next = () => keys[i++ % KEYS]
   const nextAbsent = () => absent[i++ % KEYS]
-  const batch = () => Array.from({ length: BATCH }, next)
 
   const rows = [
     ['Map.get (baseline)', measure(() => use(map.get(next())))],
@@ -55,8 +53,6 @@ function singleThread() {
     ['cache.getBuffer (hit)', measure(() => use(cache.getBuffer(next())))],
     ['cache.getBuffer (miss)', measure(() => use(cache.getBuffer(nextAbsent())))],
     ['cache.setBuffer', measure(() => (cache.setBuffer(next(), value), 1))],
-    [`cache.getPacked x${BATCH}`, measure(() => (use(cache.getPacked(batch())), BATCH))],
-    [`cache.getBuffer x${BATCH} (loop)`, measure(() => { for (let j = 0; j < BATCH; j++) use(cache.getBuffer(next())); return BATCH })],
   ]
   return rows
 }

@@ -91,28 +91,6 @@ too small to give every shard about 32 entries (judged by `estimatedEntryBytes`)
 Both views share one store: `getBuffer` on a key written by `set` returns its UTF-8 JSON, and `get` on a key
 written by `setBuffer` parses the bytes as JSON.
 
-### Batch reads
-
-`getPacked(keys)` looks up many keys' raw bytes in one native call and returns a single `Buffer`: for each key, a
-`u32` little-endian length followed by that many bytes, or `0xffffffff` with no bytes for a miss.
-
-One call and one Buffer for the whole batch makes this about 5x faster than looping `getBuffer` for 64-byte
-values and 2.5x for 1 KB values. From about 16 KB up both are bound by copying the bytes and run level.
-
-```js
-function unpack(buf) {
-  const out = []
-  for (let at = 0; at < buf.length; ) {
-    const len = buf.readUInt32LE(at)
-    at += 4
-    if (len === 0xffffffff) { out.push(undefined); continue }
-    out.push(buf.subarray(at, at + len))
-    at += len
-  }
-  return out
-}
-```
-
 ## Notes
 
 - Values are copied in on `set` and out on `get`; the cache never hands JS a view of its own memory.

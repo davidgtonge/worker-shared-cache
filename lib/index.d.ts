@@ -38,11 +38,6 @@ export declare class SharedCache {
   getBuffer(key: string): Buffer | undefined
   /** Stores a copy of the bytes. Throws a RangeError when the entry is over `maxEntryBytes`. */
   setBuffer(key: string, value: ArrayBufferView): void
-  /**
-   * Raw lookups for many keys in one call, returned as one Buffer: per key a u32 LE length followed by
-   * that many bytes, or 0xffffffff and no bytes for a miss.
-   */
-  getPacked(keys: string[]): Buffer
   stats(): Stats
   /** The largest key + value, in bytes, this cache accepts: about `maxBytes / shards`. */
   readonly maxEntryBytes: number

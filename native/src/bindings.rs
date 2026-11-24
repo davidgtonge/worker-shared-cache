@@ -3,16 +3,15 @@
 // napi hands every argument over as an owned value, used or not.
 #![allow(clippy::needless_pass_by_value)]
 
-use std::ptr;
 use std::sync::Arc;
 
-use napi::bindgen_prelude::{Buffer, BufferSlice, FromNapiValue};
-use napi::{Env, Error, JsString, Result, Status, sys};
+use napi::bindgen_prelude::{Buffer, BufferSlice};
+use napi::{Env, Error, JsString, Result};
 use napi_derive::napi;
 
 use crate::config::Config;
 use crate::registry;
-use crate::store::{Bytes, Store};
+use crate::store::Store;
 
 #[napi(object)]
 pub struct CacheOptions {
@@ -77,13 +76,6 @@ impl NativeCache {
         env.create_string(text).map(Some)
     }
 
-    /// One Buffer for the whole batch: per key a u32 LE length (`u32::MAX` for a miss), then the bytes.
-    #[napi]
-    pub fn get_packed<'env>(&self, env: &'env Env, keys: Vec<String>) -> Result<BufferSlice<'env>> {
-        let found: Vec<Option<Bytes>> = keys.iter().map(|key| self.0.get(key)).collect();
-        packed_buffer(env, &found)
-    }
-
     #[napi]
     pub fn stats(&self) -> Stats {
         let stats = self.0.stats();
@@ -104,39 +96,4 @@ impl NativeCache {
     pub fn shards(&self) -> u32 {
         u32::try_from(self.0.shards()).unwrap_or(u32::MAX)
     }
-}
-
-/// Writes `parts` in the `getPacked` layout into one Node Buffer, sized up front so every byte is copied
-/// once. (Building a Vec and then copying it into a Buffer copied large batches several times over.)
-fn packed_buffer<'env>(env: &'env Env, parts: &[Option<Bytes>]) -> Result<BufferSlice<'env>> {
-    let len = parts.iter().map(|part| 4 + part.as_ref().map_or(0, |bytes| bytes.len())).sum();
-    let mut buffer = ptr::null_mut();
-    let mut data = ptr::null_mut();
-    // SAFETY: allocates a Node Buffer of `len` uninitialized bytes, returning it in `buffer` and its memory
-    // in `data`.
-    let status = unsafe { sys::napi_create_buffer(env.raw(), len, &raw mut data, &raw mut buffer) };
-    if status != sys::Status::napi_ok {
-        return Err(Error::new(Status::from(status), format!("could not allocate a {len}-byte Buffer")));
-    }
-    let mut at = data.cast::<u8>();
-    for part in parts {
-        let (header, body): ([u8; 4], &[u8]) = match part {
-            Some(bytes) => {
-                let n = u32::try_from(bytes.len()).expect("entries are under maxEntryBytes, far below 4 GB");
-                (n.to_le_bytes(), bytes)
-            }
-            None => (u32::MAX.to_le_bytes(), &[]),
-        };
-        // SAFETY: `len` counted 4 bytes plus the body for every part, so each write stays inside the
-        // buffer, and the cache's bytes never overlap memory Node just allocated. Writing through a raw
-        // pointer avoids making a Rust reference to the still-uninitialized bytes.
-        unsafe {
-            ptr::copy_nonoverlapping(header.as_ptr(), at, header.len());
-            at = at.add(header.len());
-            ptr::copy_nonoverlapping(body.as_ptr(), at, body.len());
-            at = at.add(body.len());
-        }
-    }
-    // SAFETY: `buffer` is the Buffer created above, and every byte of it is now written.
-    unsafe { BufferSlice::from_napi_value(env.raw(), buffer) }
 }

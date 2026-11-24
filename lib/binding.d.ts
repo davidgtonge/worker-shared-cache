@@ -16,8 +16,6 @@ export declare class NativeCache {
   setBuffer(key: string, value: Buffer): boolean
   /** The bytes as a JS string, made directly with no Buffer in between. Fails if they are not UTF-8. */
   getString(key: string): string | null
-  /** One Buffer for the whole batch: per key a u32 LE length (`u32::MAX` for a miss), then the bytes. */
-  getPacked(keys: Array<string>): Buffer
   stats(): Stats
   get maxEntryBytes(): number
   get shards(): number
