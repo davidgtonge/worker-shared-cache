@@ -233,4 +233,4 @@ The tag reruns every check, then the `publish` job waits for approval of the `np
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 Dave Tonge
