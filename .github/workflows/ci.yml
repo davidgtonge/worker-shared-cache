@@ -196,9 +196,7 @@ jobs:
   # Runs only for a pushed tag like v0.2.0, after everything above passes, and only once someone approves
   # the `npm` environment (Settings > Environments). Authenticates with npm trusted publishing: GitHub
   # issues a short-lived OIDC token that npm accepts for packages that name this workflow and environment
-  # as their trusted publisher, so no long-lived npm token exists. For the very first release, before the
-  # packages exist on npm and can name a trusted publisher, an NPM_TOKEN secret is used if one is set;
-  # delete it afterwards. See "Releasing" in the README.
+  # as their trusted publisher, so no npm token exists. See "Security" in the README.
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [lint, coverage, types, build, node-versions, package]
@@ -232,14 +230,6 @@ jobs:
         with: { pattern: 'bindings-*', path: artifacts, merge-multiple: true }
       - name: Move each binary into its platform package
         run: npx napi artifacts --output-dir artifacts --npm-dir npm
-      - name: Use the bootstrap token, if set (first release only)
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -n "$NPM_TOKEN" ]; then
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
-            echo "::warning::Publishing with the NPM_TOKEN secret. Once these packages name this workflow as their trusted publisher, delete the secret."
-          fi
       - name: Publish the platform packages, then the main package
         run: |
           npx napi pre-publish --npm-dir npm --tag-style npm

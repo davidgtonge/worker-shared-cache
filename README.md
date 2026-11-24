@@ -127,92 +127,109 @@ npm run bench:serialize                    # JSON vs v8.serialize for a 10-key o
 This prints single-thread throughput next to a plain `Map` baseline, then the combined throughput of 1..N
 worker threads for get hits, get misses, and a 90/10 get/set mix.
 
-## Development
+## Security
+
+### Reporting a vulnerability
+
+Please report security problems privately, not in a public issue: use **Report a vulnerability** on the
+[Security tab](https://github.com/davidgtonge/worker-shared-cache/security/advisories/new). Include the
+version, platform and, if you can, a way to reproduce it. Fixes ship as a new release; only the latest
+version is supported.
+
+### JS dependencies
+
+- **None at runtime.** Installing pulls in only `worker-shared-cache` and the one prebuilt package for the
+  machine (an `optionalDependency` pinned to the exact same version). Nothing runs or compiles on install:
+  no package has install scripts.
+- The development tools (`@napi-rs/cli`, `typescript`, `@types/node`, `@arethetypeswrong/cli`) are dev
+  dependencies only, locked in `package-lock.json` and installed with `npm ci`.
+- Dependabot proposes updates weekly.
+
+### Rust dependencies
+
+- Compiled into the binary: `napi` and `napi-derive` (Node-API bindings), `quick_cache` (the cache itself),
+  and on Linux `mimalloc` (the allocator). `napi-build` runs only at build time. All 49 crates are locked in
+  `native/Cargo.lock`.
+- The crate has no `unsafe` code of its own, and clippy runs in pedantic mode with warnings as errors.
+- Dependabot proposes updates weekly.
+
+### Publishing
+
+Releases publish from CI with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers). (0.1.0,
+the first release, was the exception: npm can only trust a package that already exists, so the maintainer
+published it with 2FA, from binaries CI had built and tested.)
+
+- **No npm tokens.** For each release GitHub gives the publish job a short-lived OIDC token, which npm accepts
+  only for these packages, from `ci.yml` in this repository, in the `npm` environment. Every package is set
+  to require two-factor authentication and disallow tokens, so nothing else can publish.
+- **A person approves each release.** The `npm` environment needs a maintainer's approval and accepts only
+  `v*` tags, and a ruleset lets only repository admins create, move or delete those tags.
+- **Only tested binaries ship.** A release publishes the binaries built and tested on their own platforms in
+  the same run, after lint, coverage and the type checks pass, and only if the tag matches `package.json`.
+- **Pinned inputs.** Actions are pinned to commit SHAs and build images to digests. Release builds restore
+  no caches, and the publish job installs with `--ignore-scripts`.
+- **Verifiable.** From 0.1.1, each package carries [provenance](https://docs.npmjs.com/generating-provenance-statements):
+  a signed record of the commit and workflow that built it. `npm audit signatures` checks it.
+
+## Contributing
+
+Issues and pull requests are welcome. For anything bigger than a fix, open an issue first so we can agree
+on the approach. Security problems go through [private reporting](#reporting-a-vulnerability) instead.
+
+### Setup
+
+You need Node 22+ and stable Rust ([rustup](https://rustup.rs)). For `npm run coverage`, also
+`cargo install cargo-llvm-cov` and `rustup component add llvm-tools`.
 
 ```sh
 npm install
-npm run build     # release build of the native addon for this platform, then tsc
+npm run build             # native addon for this platform (release build), then tsc
 npm test
-npm run lint      # rustfmt, clippy (pedantic, warnings as errors) and a strict tsc type check
-npm run coverage  # JS coverage (fails below 100%) and Rust coverage of an instrumented build
+npm run lint              # rustfmt, clippy (pedantic, warnings as errors) and a strict tsc type check
 npm run check:types       # pack, then check the types with Are the Types Wrong and a TypeScript 5 consumer
 npm run check:types -- 7  # the same with TypeScript 7
+npm run coverage          # JS coverage (fails below 100%) and Rust coverage of an instrumented build
 ```
 
-`npm run coverage` needs `cargo install cargo-llvm-cov` and `rustup component add llvm-tools`. JS is at 100%,
-as is every Rust file but `bindings.rs`, whose only uncovered lines are the code `#[napi]` generates to
-reject wrong-typed arguments; `src/index.ts` rejects those first with a `TypeError`.
+### Before opening a pull request
+
+- Add or update tests for any change in behaviour, and keep JS coverage at 100%. (The only Rust lines left
+  uncovered are the code `#[napi]` generates to reject wrong-typed arguments, which `src/index.ts` rejects
+  first.)
+- Make sure `npm test`, `npm run lint` and `npm run check:types` pass.
+- CI then builds and tests every platform on its own architecture: macOS arm64 and x64, Windows x64, and Linux
+  x64 and arm64 for both glibc (in Debian bullseye, so the binaries need only glibc 2.31) and musl (in Alpine).
+  It also assembles and dry-runs the release.
 
 `test/stress.test.js` runs 24 workers against one small cache at once, mixing JSON and raw reads and writes
-with oversized writes, and checks every value read back is intact and the stats add up. Scale it with
+with oversized writes, and checks every value read back is intact. Scale it with
 `STRESS_WORKERS=48 STRESS_OPS=100000 node --test test/stress.test.js`.
+
+### Project layout
 
 | Path | What it holds |
 |---|---|
 | `src/index.ts` | The public API: JSON and raw views over the native cache, plus argument checks |
-| `lib/` | Build output: `index.js` and `index.d.ts` from `tsc`, the built `.node` file, and the loader napi-rs generates (`binding.js`, `binding.d.ts`, committed so TypeScript can compile without a Rust build) |
-| `npm/` | One package per platform, each publishing that platform's `.node` file |
-| `.github/workflows/ci.yml` | Native builds and tests per platform, lint, coverage, and publishing on version tags |
-| `native/` | The Rust crate (`cargo` commands take `--manifest-path native/Cargo.toml`) |
 | `native/src/bindings.rs` | The napi surface `src/index.ts` calls |
 | `native/src/config.rs` | Option validation and defaults |
 | `native/src/store.rs` | One cache: lookups, the per-entry size limit, stats |
 | `native/src/counters.rs` | Hit and miss counts that threads bump without contending |
 | `native/src/registry.rs` | The process-wide map from cache name to store |
-| `test/`, `bench/` | `node:test` suites and throughput benchmarks |
+| `lib/` | Build output: `index.js` and `index.d.ts` from `tsc`, the built `.node` file, and the loader napi-rs generates (`binding.js`, `binding.d.ts`, committed so TypeScript compiles without a Rust build) |
+| `npm/` | One package per platform, each publishing that platform's `.node` file |
+| `test/`, `bench/` | `node:test` suites, type checks and throughput benchmarks |
+| `.github/workflows/ci.yml` | Native builds and tests per platform, lint, coverage, type checks, and publishing |
 
-## CI and releases
-
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds every platform on its own architecture and
-runs the full test suite there: Linux glibc builds in Debian bullseye containers (so the binaries need glibc
-2.31, not the runner's newer one) and musl builds in Alpine containers, each on x64 and arm64 runners.
-
-Every run also assembles the release (each binary moved into its `npm/<platform>` package) and dry-runs
-napi's and npm's publish checks, so a broken release shows up before a tag is pushed.
-
-### Releasing
+### Releasing (maintainers)
 
 ```sh
 npm version minor   # bumps package.json and every npm/<platform>/package.json, commits, tags
 git push --follow-tags
 ```
 
-The tag reruns every check, then the `publish` job waits for approval of the `npm` environment (Actions tab
-→ the run → Review deployments). Once approved it publishes the 7 platform packages, then
+The tag reruns every check, then the `publish` job waits for approval of the `npm` environment (the run's
+**Review deployments** button). Once approved, it publishes the 7 platform packages, then
 `worker-shared-cache` pinned to them.
-
-How publishing is protected:
-
-- **No long-lived npm token.** `publish` authenticates with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers):
-  GitHub gives the job a short-lived OIDC token, which npm accepts only for packages that name this repository,
-  `ci.yml` and the `npm` environment as their trusted publisher.
-- **A human approves each release.** The `npm` environment needs a reviewer's approval and accepts only `v*`
-  tags, and a tag ruleset lets only repository admins create, move or delete `v*` tags.
-- **Pinned inputs.** Actions are pinned to commit SHAs and build images to digests (Dependabot proposes
-  updates); release builds restore no caches; the publish job installs with `--ignore-scripts`.
-- **Tested binaries only.** It publishes the binaries built and tested in the same run, and checks the tag
-  matches `package.json`.
-
-#### One-time setup
-
-npm can only name a trusted publisher for a package that already exists, so the first release uses a token:
-
-1. Create a granular access token on npmjs.com with read and write access to all packages, expiring in a
-   day, and add it as the repository secret `NPM_TOKEN`.
-2. Release as above. The publish job uses the token when the secret is set, and warns that it did.
-3. For each of the 8 packages (`worker-shared-cache` and its 7 platform packages), add a trusted publisher:
-   GitHub Actions, user `davidgtonge`, repository `worker-shared-cache`, workflow `ci.yml`, environment `npm`,
-   and under "Allowed actions" allow direct publishing with `npm publish`. (npm now creates new trusted
-   publishers allowing only `npm stage publish`, which holds each version for approval on npmjs.com; the
-   workflow publishes directly, after the `npm` environment's approval.) With npm 11.15+, per package:
-   `npm trust github <package> --repo davidgtonge/worker-shared-cache --file ci.yml --env npm --allow-publish`
-4. Delete the `NPM_TOKEN` secret and revoke the token on npmjs.com.
-5. On each package's Settings page, set Publishing access to **Require two-factor authentication and
-   disallow tokens**, so only this workflow (or you, with 2FA) can publish.
-
-npm generates [provenance](https://docs.npmjs.com/generating-provenance-statements), a signed record of the
-commit and workflow that built each package, automatically with trusted publishing, but only from a public
-repository. While this repository is private, packages publish without it.
 
 ## License
 
