@@ -10,13 +10,12 @@
 export declare const __napiBindingTarget: 'native' | 'wasm32-wasi' | 'wasm32-wasip1'
 
 export declare class NativeCache {
+  /** The raw bytes, copied into a new Buffer. */
   getBuffer(key: string): Buffer | null
   /** Returns `false`, storing nothing, when the entry is over `maxEntryBytes`. */
   setBuffer(key: string, value: Buffer): boolean
-  /** Reads the value as UTF-8 straight into a JS string, with no Buffer in between. */
+  /** The bytes as a JS string, made directly with no Buffer in between. Fails if they are not UTF-8. */
   getString(key: string): string | null
-  /** Returns `false`, storing nothing, when the entry is over `maxEntryBytes`. */
-  setString(key: string, value: string): boolean
   /** One Buffer for the whole batch: per key a u32 LE length (`u32::MAX` for a miss), then the bytes. */
   getPacked(keys: Array<string>): Buffer
   stats(): Stats

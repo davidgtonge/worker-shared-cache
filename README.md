@@ -81,8 +81,9 @@ too small to give every shard about 32 entries (judged by `estimatedEntryBytes`)
 
 ### JSON or raw bytes
 
-- `get` / `set` run values through `JSON.stringify` / `JSON.parse`. The JSON text crosses into native code as
-  a string, so a read costs little more than `JSON.parse` itself. `set` throws for values with no JSON form
+- `get` / `set` run values through `JSON.stringify` / `JSON.parse`. `get` has the native side make the JS
+  string `JSON.parse` needs straight from the cached bytes, skipping the Buffer that dominates a raw read,
+  so it costs little more than `JSON.parse` itself. `set` throws for values with no JSON form
   (`undefined`, functions, `BigInt`), and `get` returns `undefined` on a miss, so a stored `null` stays `null`.
 - `getBuffer` / `setBuffer` store bytes untouched. Use them for binary data or your own encoding, such as
   `v8.serialize` when values hold `Date`, `Map`, `Set` or `BigInt`.

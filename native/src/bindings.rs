@@ -45,8 +45,17 @@ pub fn open_cache(name: String, max_bytes: f64, options: Option<CacheOptions>) -
 #[allow(clippy::cast_precision_loss)]
 #[napi]
 impl NativeCache {
-    // Copying into a Buffer that Node allocates is much cheaper than handing Node a Rust Vec, which
-    // registers a finalizer per Buffer.
+    // Two read paths, because the step from cached bytes to a JS value dominates a read:
+    //
+    // - `get_buffer` copies into a Buffer that Node allocates. That is much cheaper than handing Node a
+    //   Rust Vec, which registers a finalizer per Buffer, but making any Buffer still costs ~0.5 µs.
+    // - `get_string` skips the Buffer and makes the JS string `JSON.parse` needs directly from the bytes,
+    //   a plain copy for ASCII. Reading text this way is ~3.5x faster than `getBuffer().toString()`.
+    //
+    // Writes need only one path: `Buffer.from(text)` in JS then `set_buffer` costs the same as passing
+    // the string in, since either way the text is encoded to UTF-8 once and copied once.
+
+    /// The raw bytes, copied into a new Buffer.
     #[napi]
     pub fn get_buffer<'env>(&self, env: &'env Env, key: String) -> Result<Option<BufferSlice<'env>>> {
         self.0.get(&key).map(|bytes| BufferSlice::copy_from(env, bytes)).transpose()
@@ -58,19 +67,13 @@ impl NativeCache {
         self.0.insert(key, Arc::from(value.as_ref()))
     }
 
-    /// Reads the value as UTF-8 straight into a JS string, with no Buffer in between.
+    /// The bytes as a JS string, made directly with no Buffer in between. Fails if they are not UTF-8.
     #[napi]
     pub fn get_string<'env>(&self, env: &'env Env, key: String) -> Result<Option<JsString<'env>>> {
         let Some(bytes) = self.0.get(&key) else { return Ok(None) };
         let text = std::str::from_utf8(&bytes)
             .map_err(|_| Error::from_reason(format!("value for '{key}' is not UTF-8")))?;
         env.create_string(text).map(Some)
-    }
-
-    /// Returns `false`, storing nothing, when the entry is over `maxEntryBytes`.
-    #[napi]
-    pub fn set_string(&self, key: String, value: String) -> bool {
-        self.0.insert(key, Arc::from(value.into_bytes()))
     }
 
     /// One Buffer for the whole batch: per key a u32 LE length (`u32::MAX` for a miss), then the bytes.
