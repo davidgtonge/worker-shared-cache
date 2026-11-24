@@ -29,6 +29,7 @@
     "build": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts --release",
     "build:debug": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts",
     "test": "node --test test/*.test.js",
+    "coverage": "test/coverage.sh",
     "lint": "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --release -- -D warnings && tsc --noEmit --strict lib/index.d.ts",
     "bench": "node bench/bench.js",
     "bench:serialize": "node bench/serialize.js"

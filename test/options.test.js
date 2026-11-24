@@ -58,7 +58,9 @@ test('invalid options throw', () => {
   for (const maxBytes of [0, -1, 1.5, NaN, Infinity]) {
     assert.throws(() => openCache(`bad-max-${maxBytes}`, maxBytes), /maxBytes must be a whole number/)
   }
-  assert.throws(() => openCache('bad-shards', MB, { shards: 0 }), /shards must be at least 1/)
+  for (const shards of [0, -1, 4.5, 2 ** 32, NaN]) {
+    assert.throws(() => openCache(`bad-shards-${shards}`, MB, { shards }), /shards must be a whole number from 1 to 65536/)
+  }
   for (const hotAllocation of [0, 1.5, -0.1]) {
     assert.throws(() => openCache(`bad-hot-${hotAllocation}`, MB, { hotAllocation }), /hotAllocation/)
   }

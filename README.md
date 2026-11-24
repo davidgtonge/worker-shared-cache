@@ -24,13 +24,14 @@ cache.stats() // { entries, bytes, hits, misses }
 ```
 
 Calling `openCache` with the same name from any thread returns the same cache. Reopening it with a
-different `maxBytes` or options throws.
+different `maxBytes` or options throws. Keys must be strings; wrong-typed arguments and unknown options
+throw a `TypeError`.
 
 ### Options
 
 ```js
 openCache('images', 512 * 1024 * 1024, {
-  shards: 8,                 // default: CPU count × 4, rounded up to a power of two (see Shards)
+  shards: 8,                 // 1 to 65536; default: CPU count × 4, rounded up to a power of two (see Shards)
   hotAllocation: 0.97,       // default: 0.97
   estimatedEntryBytes: 64e3, // default: 1024; only sizes internal tables
 })
@@ -114,8 +115,13 @@ worker threads for get hits, get misses, and a 90/10 get/set mix.
 npm install
 npm run build   # release build of the native addon for this platform
 npm test
-npm run lint    # rustfmt, clippy (pedantic, warnings as errors) and a type check of lib/index.d.ts
+npm run lint      # rustfmt, clippy (pedantic, warnings as errors) and a type check of lib/index.d.ts
+npm run coverage  # JS coverage (fails below 100%) and Rust coverage of an instrumented build
 ```
+
+`npm run coverage` needs `cargo install cargo-llvm-cov` and `rustup component add llvm-tools`. JS is at 100%,
+as is every Rust file but `bindings.rs`, whose only uncovered lines are the code `#[napi]` generates to
+reject wrong-typed arguments; `lib/index.js` rejects those first with a `TypeError`.
 
 `test/stress.test.js` runs 24 workers against one small cache at once, mixing JSON and raw reads and writes
 with oversized writes, and checks every value read back is intact and the stats add up. Scale it with

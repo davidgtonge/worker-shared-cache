@@ -15,7 +15,7 @@ use crate::store::Store;
 
 #[napi(object)]
 pub struct CacheOptions {
-    pub shards: Option<u32>,
+    pub shards: Option<f64>,
     pub hot_allocation: Option<f64>,
     pub estimated_entry_bytes: Option<f64>,
 }
