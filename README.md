@@ -30,7 +30,7 @@ different `maxBytes` or options throws.
 
 ```js
 openCache('images', 512 * 1024 * 1024, {
-  shards: 8,                 // default: CPU count × 4, rounded up to a power of two
+  shards: 8,                 // default: CPU count × 4, rounded up to a power of two (see Shards)
   hotAllocation: 0.97,       // default: 0.97
   estimatedEntryBytes: 64e3, // default: 1024; only sizes internal tables
 })
@@ -44,13 +44,40 @@ again; keys that are read again move to the main area (`hotAllocation` of the sp
 remembers recently evicted keys and readmits them straight to the main area. Hit rates are as good as LRU's
 or better, and a one-off scan over many keys can't flush out the entries you use often.
 
-### Entry size limit
+### Shards
 
-To let threads work in parallel, the cache is split into `shards` parts that each hold an equal share of
-`maxBytes`. One entry (key + value) can't be bigger than a part, so the limit is about `maxBytes / shards`;
-`cache.maxEntryBytes` gives the exact figure. `set` and `setBuffer` throw a `RangeError` for a bigger entry
-and drop any older value under that key. If you cache large values, pass fewer `shards`: the default of
-64 on a 16-core machine limits a 64 MB cache to entries of about 1 MB.
+A cache is not one table but several independent ones, called shards. Each key belongs to exactly one
+shard, picked by hashing the key, so keys spread evenly across them. Each shard has:
+
+- **its own lock.** Reads share a shard; a write has it to itself for the moment it takes. Threads
+  touching different shards never wait for each other, so more shards means less waiting when many
+  workers write at once.
+- **its own share of memory**: `maxBytes / shards`. A shard evicts when *it* is full, even if others have
+  room. With keys spread evenly this evens out, so the cache as a whole stays close to `maxBytes`.
+- **its own eviction**, as described above, over just its keys.
+
+The number of shards is fixed when the cache opens. By default it is 4 per CPU core, rounded up to a power
+of two: 64 on a 10- or 16-core machine. `shards` overrides it (also rounded up to a power of two), and a cache
+too small to give every shard about 32 entries (judged by `estimatedEntryBytes`) gets fewer.
+`cache.shards` reports the number in use.
+
+**The catch: one entry must fit in one shard.** An entry (key + value) can be at most about
+`maxBytes / shards`; `cache.maxEntryBytes` gives the exact figure (a shard's `hotAllocation`). `set` and
+`setBuffer` throw a `RangeError` for anything bigger, and drop any older value under that key.
+
+| `maxBytes` | `shards` | `maxEntryBytes` (about) |
+|---|---|---|
+| 64 MB | 64 (default, 10–16 cores) | 1 MB |
+| 64 MB | 8 | 8 MB |
+| 512 MB | 64 | 8 MB |
+| 512 MB | 16 | 32 MB |
+
+**Choosing a number:**
+
+- Small values (up to a few KB), many workers: keep the default.
+- Large values: pick `shards` so that `maxBytes / shards` is at least 2–4× your largest value, which also
+  stops a few big entries crowding everything else out of their shard.
+- Few workers, or mostly reads: fewer shards cost little, since reads share a shard's lock anyway.
 
 ### JSON or raw bytes
 
