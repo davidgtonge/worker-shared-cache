@@ -1,5 +1,5 @@
 {
-  "name": "node-shared-cache",
+  "name": "worker-shared-cache",
   "version": "0.1.0",
   "description": "A byte-bounded cache per name, shared by every Node worker thread in the process",
   "author": "Dave Tonge",
@@ -8,10 +8,11 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
-    "lib"
+    "lib/*.js",
+    "lib/*.d.ts"
   ],
   "napi": {
-    "binaryName": "node-shared-cache",
+    "binaryName": "worker-shared-cache",
     "targets": [
       "x86_64-apple-darwin",
       "aarch64-apple-darwin",
@@ -23,7 +24,7 @@
     ]
   },
   "engines": {
-    "node": ">= 18"
+    "node": ">= 22"
   },
   "scripts": {
     "build": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts --release",
@@ -32,11 +33,21 @@
     "coverage": "test/coverage.sh",
     "lint": "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --release -- -D warnings && tsc --noEmit --strict lib/index.d.ts",
     "bench": "node bench/bench.js",
-    "bench:serialize": "node bench/serialize.js"
+    "bench:serialize": "node bench/serialize.js",
+    "version": "napi version --npm-dir npm && git add npm"
   },
   "devDependencies": {
     "@napi-rs/cli": "^3.4.0",
     "@types/node": "^22.20.5",
     "typescript": "^5.9.3"
-  }
+  },
+  "keywords": [
+    "cache",
+    "shared",
+    "worker_threads",
+    "napi",
+    "s3-fifo"
+  ],
+  "homepage": "https://github.com/davidgtonge/node-shared-cache#readme",
+  "bugs": "https://github.com/davidgtonge/node-shared-cache/issues"
 }

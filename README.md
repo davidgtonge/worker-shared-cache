@@ -1,4 +1,4 @@
-# node-shared-cache
+# worker-shared-cache
 
 A byte-bounded in-memory cache, shared by every Node.js worker thread in the process.
 
@@ -6,10 +6,25 @@ Each named cache lives in native memory (Rust, [`quick_cache`](https://crates.io
 `worker_threads` that open the same name see the same entries without copying data through `postMessage`.
 Entries are weighed by `key.length + value.length` bytes and evicted once the cache exceeds `maxBytes`.
 
+## Install
+
+```sh
+npm install worker-shared-cache
+```
+
+Prebuilt binaries ship for these platforms, and npm installs only the one matching the machine. Node 22 or later.
+
+| Platform | Package |
+|---|---|
+| macOS arm64 / x64 | `worker-shared-cache-darwin-arm64`, `-darwin-x64` |
+| Linux x64 / arm64 (glibc 2.31+: Debian 11+, Ubuntu 20.04+, Amazon Linux 2023, RHEL 9) | `-linux-x64-gnu`, `-linux-arm64-gnu` |
+| Alpine and other musl Linux, x64 / arm64 (including AWS Graviton) | `-linux-x64-musl`, `-linux-arm64-musl` |
+| Windows x64 | `-win32-x64-msvc` |
+
 ## Usage
 
 ```js
-const { openCache } = require('node-shared-cache')
+const { openCache } = require('worker-shared-cache')
 
 const cache = openCache('users', 256 * 1024 * 1024) // 256 MB
 
@@ -138,6 +153,22 @@ with oversized writes, and checks every value read back is intact and the stats 
 | `native/src/counters.rs` | Hit and miss counts that threads bump without contending |
 | `native/src/registry.rs` | The process-wide map from cache name to store |
 | `test/`, `bench/` | `node:test` suites and throughput benchmarks |
+
+## CI and releases
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds every platform on its own architecture and
+runs the full test suite there: Linux glibc builds in Debian bullseye containers (so the binaries need glibc
+2.31, not the runner's newer one) and musl builds in Alpine containers, each on x64 and arm64 runners.
+
+To release, with an `NPM_TOKEN` repository secret that can publish:
+
+```sh
+npm version minor   # bumps package.json and every npm/<platform>/package.json, commits, tags
+git push --follow-tags
+```
+
+The tag starts the `publish` job once lint, coverage and every build pass. It moves each binary into its
+`npm/<platform>` package, publishes those, then publishes `worker-shared-cache` pinned to them.
 
 ## License
 

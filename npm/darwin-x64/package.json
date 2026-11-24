@@ -1,0 +1,30 @@
+{
+  "name": "worker-shared-cache-darwin-x64",
+  "version": "0.1.0",
+  "cpu": [
+    "x64"
+  ],
+  "main": "worker-shared-cache.darwin-x64.node",
+  "files": [
+    "worker-shared-cache.darwin-x64.node"
+  ],
+  "description": "A byte-bounded cache per name, shared by every Node worker thread in the process",
+  "keywords": [
+    "cache",
+    "shared",
+    "worker_threads",
+    "napi",
+    "s3-fifo"
+  ],
+  "author": "Dave Tonge",
+  "homepage": "https://github.com/davidgtonge/node-shared-cache#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">= 22"
+  },
+  "repository": "github:davidgtonge/node-shared-cache",
+  "bugs": "https://github.com/davidgtonge/node-shared-cache/issues",
+  "os": [
+    "darwin"
+  ]
+}
