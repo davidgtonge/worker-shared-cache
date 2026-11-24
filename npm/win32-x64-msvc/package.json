@@ -22,7 +22,10 @@
   "engines": {
     "node": ">= 22"
   },
-  "repository": "github:davidgtonge/worker-shared-cache",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidgtonge/worker-shared-cache.git"
+  },
   "bugs": "https://github.com/davidgtonge/worker-shared-cache/issues",
   "os": [
     "win32"
