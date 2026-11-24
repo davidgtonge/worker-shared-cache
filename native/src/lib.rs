@@ -3,7 +3,7 @@
 //! - [`config`]: the options a cache is opened with, validated and with defaults filled in.
 //! - [`store`]: one cache, its per-entry size limit and its hit/miss counts.
 //! - [`registry`]: the process-wide map from cache name to store.
-//! - [`bindings`]: the napi surface that `index.js` wraps.
+//! - [`bindings`]: the napi surface that `lib/index.js` wraps.
 
 mod bindings;
 mod config;

@@ -105,7 +105,7 @@ worker threads for get hits, get misses, and a 90/10 get/set mix.
 npm install
 npm run build   # release build of the native addon for this platform
 npm test
-npm run lint    # rustfmt, clippy (pedantic, warnings as errors) and a type check of index.d.ts
+npm run lint    # rustfmt, clippy (pedantic, warnings as errors) and a type check of lib/index.d.ts
 ```
 
 `test/stress.test.js` runs 24 workers against one small cache at once, mixing JSON and raw reads and writes
@@ -114,13 +114,14 @@ with oversized writes, and checks every value read back is intact and the stats 
 
 | Path | What it holds |
 |---|---|
-| `index.js`, `index.d.ts` | The public API: JSON and raw views over the native cache, plus argument checks |
-| `binding.js`, `binding.d.ts` | The loader napi-rs generates for the native addon (`npm run build` rewrites them) |
-| `src/bindings.rs` | The napi surface `index.js` calls |
-| `src/config.rs` | Option validation and defaults |
-| `src/store.rs` | One cache: lookups, the per-entry size limit, stats |
-| `src/counters.rs` | Hit and miss counts that threads bump without contending |
-| `src/registry.rs` | The process-wide map from cache name to store |
+| `lib/index.js`, `lib/index.d.ts` | The public API: JSON and raw views over the native cache, plus argument checks |
+| `lib/binding.js`, `lib/binding.d.ts` | The loader napi-rs generates for the native addon (`npm run build` rewrites them, and puts the built `.node` file beside them) |
+| `native/` | The Rust crate (`cargo` commands take `--manifest-path native/Cargo.toml`) |
+| `native/src/bindings.rs` | The napi surface `lib/index.js` calls |
+| `native/src/config.rs` | Option validation and defaults |
+| `native/src/store.rs` | One cache: lookups, the per-entry size limit, stats |
+| `native/src/counters.rs` | Hit and miss counts that threads bump without contending |
+| `native/src/registry.rs` | The process-wide map from cache name to store |
 | `test/`, `bench/` | `node:test` suites and throughput benchmarks |
 
 ## License
