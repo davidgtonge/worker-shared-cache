@@ -1,13 +1,12 @@
 // Throughput benchmarks: single-thread ops against a JS Map baseline, then get() scaling across workers.
-// Usage: node bench/bench.js [--value-bytes=1024] [--keys=10000] [--seconds=1]
+// Usage: node bench/bench.js [--value-bytes=1024] [--keys=10000] [--seconds=1] [--workers=1,4,24]
+// --workers lists the worker counts to try; by default 1, 2, 4, 8 and the CPU count.
 const { Worker, isMainThread, parentPort, workerData } = require('node:worker_threads')
 const os = require('node:os')
 const { openCache } = require('..')
 
-const arg = (name, def) => {
-  const hit = process.argv.find((a) => a.startsWith(`--${name}=`))
-  return hit ? Number(hit.split('=')[1]) : def
-}
+const flag = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1]
+const arg = (name, def) => (flag(name) === undefined ? def : Number(flag(name)))
 const VALUE_BYTES = arg('value-bytes', 1024)
 const KEYS = arg('keys', 10_000)
 const SECONDS = arg('seconds', 1)
@@ -72,14 +71,14 @@ function runWorkers(n, mode) {
 }
 
 async function main() {
-  console.log(`node ${process.version}, ${os.cpus().length} CPUs (${os.cpus()[0].model}), ${os.platform()}/${os.arch()}`)
+  console.log(`node ${process.version}, ${os.availableParallelism()} CPUs (${os.cpus()[0].model}), ${os.platform()}/${os.arch()}`)
   console.log(`value ${VALUE_BYTES} B, ${KEYS} keys, ${SECONDS}s per case\n`)
 
   console.log('single thread')
   for (const [name, rate] of singleThread()) console.log(`  ${name.padEnd(26)} ${fmt(rate)}`)
 
   fill(openCache('bench-workers', MAX_BYTES))
-  const counts = [1, 2, 4, 8, os.cpus().length].filter((n, i, a) => n <= os.cpus().length && a.indexOf(n) === i)
+  const counts = workerCounts()
   for (const mode of ['get', 'miss', 'mixed']) {
     const label = { get: '100% get (hits)', miss: '100% get (misses)', mixed: '90% get / 10% set' }[mode]
     console.log(`\nworkers, ${label} (total ops/s)`)
@@ -90,6 +89,16 @@ async function main() {
       console.log(`  ${String(n).padStart(2)} worker${n === 1 ? ' ' : 's'}  ${fmt(rate)}  ${(rate / base).toFixed(2)}x`)
     }
   }
+}
+
+function workerCounts() {
+  if (flag('workers')) {
+    const counts = flag('workers').split(',').map(Number)
+    if (counts.some((n) => !Number.isInteger(n) || n < 1)) throw new Error('--workers takes counts like 1,4,24')
+    return counts
+  }
+  const cpus = os.availableParallelism()
+  return [...new Set([1, 2, 4, 8, cpus])].filter((n) => n <= cpus).sort((a, b) => a - b)
 }
 
 function fmt(rate) {

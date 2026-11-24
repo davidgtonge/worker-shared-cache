@@ -92,6 +92,7 @@ function unpack(buf) {
 ```sh
 npm run bench                              # 1 KB values, 10k keys, 1s per case
 node bench/bench.js --value-bytes=64 --keys=100000 --seconds=2
+node bench/bench.js --workers=1,4,16,24         # pick the worker counts (default: 1, 2, 4, 8, CPU count)
 npm run bench:serialize                    # JSON vs v8.serialize for a 10-key object
 ```
 
@@ -106,6 +107,10 @@ npm run build   # release build of the native addon for this platform
 npm test
 npm run lint    # rustfmt, clippy (pedantic, warnings as errors) and a type check of index.d.ts
 ```
+
+`test/stress.test.js` runs 24 workers against one small cache at once, mixing JSON and raw reads and writes
+with oversized writes, and checks every value read back is intact and the stats add up. Scale it with
+`STRESS_WORKERS=48 STRESS_OPS=100000 node --test test/stress.test.js`.
 
 | Path | What it holds |
 |---|---|
