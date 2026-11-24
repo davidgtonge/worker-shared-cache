@@ -42,9 +42,10 @@ test('shards round up to a power of two', () => {
 })
 
 test('reopening needs the same maxBytes and options', () => {
-  openCache('reopen', 4 * MB, { shards: 8 })
-  assert.ok(openCache('reopen', 4 * MB, { shards: 8 }))
-  assert.throws(() => openCache('reopen', 8 * MB, { shards: 8 }), /already open with maxBytes 4194304, shards 8/)
+  // 3 shards can never equal the default (a multiple of 4), so reopening without options must differ.
+  openCache('reopen', 4 * MB, { shards: 3 })
+  assert.ok(openCache('reopen', 4 * MB, { shards: 3 }))
+  assert.throws(() => openCache('reopen', 8 * MB, { shards: 3 }), /already open with maxBytes 4194304, shards 3/)
   assert.throws(() => openCache('reopen', 4 * MB, { shards: 16 }), /already open/)
   assert.throws(() => openCache('reopen', 4 * MB), /already open/)
 })

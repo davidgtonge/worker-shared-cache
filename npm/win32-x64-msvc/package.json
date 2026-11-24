@@ -17,13 +17,13 @@
     "s3-fifo"
   ],
   "author": "Dave Tonge",
-  "homepage": "https://github.com/davidgtonge/node-shared-cache#readme",
+  "homepage": "https://github.com/davidgtonge/worker-shared-cache#readme",
   "license": "MIT",
   "engines": {
     "node": ">= 22"
   },
-  "repository": "github:davidgtonge/node-shared-cache",
-  "bugs": "https://github.com/davidgtonge/node-shared-cache/issues",
+  "repository": "github:davidgtonge/worker-shared-cache",
+  "bugs": "https://github.com/davidgtonge/worker-shared-cache/issues",
   "os": [
     "win32"
   ]

@@ -4,7 +4,7 @@
   "description": "A byte-bounded cache per name, shared by every Node worker thread in the process",
   "author": "Dave Tonge",
   "license": "MIT",
-  "repository": "github:davidgtonge/node-shared-cache",
+  "repository": "github:davidgtonge/worker-shared-cache",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
@@ -27,11 +27,12 @@
     "node": ">= 22"
   },
   "scripts": {
-    "build": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts --release",
-    "build:debug": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts",
+    "build": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts --release && tsc",
+    "build:debug": "napi build --platform --manifest-path native/Cargo.toml --output-dir lib --js binding.js --dts binding.d.ts && tsc",
+    "build:ts": "tsc",
     "test": "node --test test/*.test.js",
     "coverage": "test/coverage.sh",
-    "lint": "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --release -- -D warnings && tsc --noEmit --strict lib/index.d.ts",
+    "lint": "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --release -- -D warnings && tsc --noEmit",
     "bench": "node bench/bench.js",
     "bench:serialize": "node bench/serialize.js",
     "version": "napi version --npm-dir npm && git add npm"
@@ -48,6 +49,6 @@
     "napi",
     "s3-fifo"
   ],
-  "homepage": "https://github.com/davidgtonge/node-shared-cache#readme",
-  "bugs": "https://github.com/davidgtonge/node-shared-cache/issues"
+  "homepage": "https://github.com/davidgtonge/worker-shared-cache#readme",
+  "bugs": "https://github.com/davidgtonge/worker-shared-cache/issues"
 }

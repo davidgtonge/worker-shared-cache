@@ -8,7 +8,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-echo "== JS (lib/index.js)"
+# JS coverage is measured on lib/index.js, the output tsc compiles from src/index.ts. (Mapping it back to
+# the .ts source through source maps matched no files and reported a vacuous 100%, so it isn't used.)
+echo "== JS (lib/index.js, compiled from src/index.ts)"
 node --test --experimental-test-coverage --test-coverage-include='lib/index.js' \
   --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 \
   test/*.test.js | sed -n '/start of coverage report/,/end of coverage report/p'

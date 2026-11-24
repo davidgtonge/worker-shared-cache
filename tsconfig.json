@@ -1,0 +1,20 @@
+{
+  // src/index.ts compiles into lib/, beside the loader napi generates (lib/binding.js). rootDirs lets the
+  // source import './binding.js' as if it already sat there.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rootDir": "src",
+    "rootDirs": ["src", "lib"],
+    "outDir": "lib",
+    "declaration": true,
+    "stripInternal": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "types": ["node"],
+    "newLine": "lf"
+  },
+  "include": ["src"]
+}

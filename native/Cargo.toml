@@ -5,7 +5,7 @@ edition = "2024"
 authors = ["Dave Tonge"]
 description = "A byte-bounded cache per name, shared by every Node worker thread in the process"
 license = "MIT"
-repository = "https://github.com/davidgtonge/node-shared-cache"
+repository = "https://github.com/davidgtonge/worker-shared-cache"
 
 [lib]
 crate-type = ["cdylib"]
@@ -15,8 +15,13 @@ napi = { version = "3", default-features = false, features = ["napi4"] }
 napi-derive = "3"
 quick_cache = "0.7"
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
 mimalloc = "0.1"
+
+# Node loads the addon with dlopen, and musl can't give a dlopen'd library mimalloc's default
+# initial-exec thread-local storage ("initial-exec TLS resolves to dynamic definition").
+[target.'cfg(all(target_os = "linux", target_env = "musl"))'.dependencies]
+mimalloc = { version = "0.1", features = ["local_dynamic_tls"] }
 
 [build-dependencies]
 napi-build = "2"

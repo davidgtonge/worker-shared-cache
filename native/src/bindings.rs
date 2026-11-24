@@ -1,4 +1,4 @@
-//! The napi surface. `lib/index.js` wraps it to add JSON encoding and JS-side argument checks.
+//! The napi surface. `src/index.ts` wraps it to add JSON encoding and JS-side argument checks.
 
 // napi hands every argument over as an owned value, used or not.
 #![allow(clippy::needless_pass_by_value)]

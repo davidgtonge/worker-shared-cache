@@ -128,15 +128,15 @@ worker threads for get hits, get misses, and a 90/10 get/set mix.
 
 ```sh
 npm install
-npm run build   # release build of the native addon for this platform
+npm run build     # release build of the native addon for this platform, then tsc
 npm test
-npm run lint      # rustfmt, clippy (pedantic, warnings as errors) and a type check of lib/index.d.ts
+npm run lint      # rustfmt, clippy (pedantic, warnings as errors) and a strict tsc type check
 npm run coverage  # JS coverage (fails below 100%) and Rust coverage of an instrumented build
 ```
 
 `npm run coverage` needs `cargo install cargo-llvm-cov` and `rustup component add llvm-tools`. JS is at 100%,
 as is every Rust file but `bindings.rs`, whose only uncovered lines are the code `#[napi]` generates to
-reject wrong-typed arguments; `lib/index.js` rejects those first with a `TypeError`.
+reject wrong-typed arguments; `src/index.ts` rejects those first with a `TypeError`.
 
 `test/stress.test.js` runs 24 workers against one small cache at once, mixing JSON and raw reads and writes
 with oversized writes, and checks every value read back is intact and the stats add up. Scale it with
@@ -144,10 +144,12 @@ with oversized writes, and checks every value read back is intact and the stats 
 
 | Path | What it holds |
 |---|---|
-| `lib/index.js`, `lib/index.d.ts` | The public API: JSON and raw views over the native cache, plus argument checks |
-| `lib/binding.js`, `lib/binding.d.ts` | The loader napi-rs generates for the native addon (`npm run build` rewrites them, and puts the built `.node` file beside them) |
+| `src/index.ts` | The public API: JSON and raw views over the native cache, plus argument checks |
+| `lib/` | Build output: `index.js` and `index.d.ts` from `tsc`, the built `.node` file, and the loader napi-rs generates (`binding.js`, `binding.d.ts`, committed so TypeScript can compile without a Rust build) |
+| `npm/` | One package per platform, each publishing that platform's `.node` file |
+| `.github/workflows/ci.yml` | Native builds and tests per platform, lint, coverage, and publishing on version tags |
 | `native/` | The Rust crate (`cargo` commands take `--manifest-path native/Cargo.toml`) |
-| `native/src/bindings.rs` | The napi surface `lib/index.js` calls |
+| `native/src/bindings.rs` | The napi surface `src/index.ts` calls |
 | `native/src/config.rs` | Option validation and defaults |
 | `native/src/store.rs` | One cache: lookups, the per-entry size limit, stats |
 | `native/src/counters.rs` | Hit and miss counts that threads bump without contending |
