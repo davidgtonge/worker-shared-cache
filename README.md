@@ -162,15 +162,52 @@ with oversized writes, and checks every value read back is intact and the stats 
 runs the full test suite there: Linux glibc builds in Debian bullseye containers (so the binaries need glibc
 2.31, not the runner's newer one) and musl builds in Alpine containers, each on x64 and arm64 runners.
 
-To release, with an `NPM_TOKEN` repository secret that can publish:
+Every run also assembles the release (each binary moved into its `npm/<platform>` package) and dry-runs
+napi's and npm's publish checks, so a broken release shows up before a tag is pushed.
+
+### Releasing
 
 ```sh
 npm version minor   # bumps package.json and every npm/<platform>/package.json, commits, tags
 git push --follow-tags
 ```
 
-The tag starts the `publish` job once lint, coverage and every build pass. It moves each binary into its
-`npm/<platform>` package, publishes those, then publishes `worker-shared-cache` pinned to them.
+The tag reruns every check, then the `publish` job waits for approval of the `npm` environment (Actions tab
+→ the run → Review deployments). Once approved it publishes the 7 platform packages, then
+`worker-shared-cache` pinned to them.
+
+How publishing is protected:
+
+- **No long-lived npm token.** `publish` authenticates with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers):
+  GitHub gives the job a short-lived OIDC token, which npm accepts only for packages that name this repository,
+  `ci.yml` and the `npm` environment as their trusted publisher.
+- **A human approves each release.** The `npm` environment needs a reviewer's approval and accepts only `v*`
+  tags, and a tag ruleset lets only repository admins create, move or delete `v*` tags.
+- **Pinned inputs.** Actions are pinned to commit SHAs and build images to digests (Dependabot proposes
+  updates); release builds restore no caches; the publish job installs with `--ignore-scripts`.
+- **Tested binaries only.** It publishes the binaries built and tested in the same run, and checks the tag
+  matches `package.json`.
+
+#### One-time setup
+
+npm can only name a trusted publisher for a package that already exists, so the first release uses a token:
+
+1. Create a granular access token on npmjs.com with read and write access to all packages, expiring in a
+   day, and add it as the repository secret `NPM_TOKEN`.
+2. Release as above. The publish job uses the token when the secret is set, and warns that it did.
+3. For each of the 8 packages (`worker-shared-cache` and its 7 platform packages), add a trusted publisher:
+   GitHub Actions, user `davidgtonge`, repository `worker-shared-cache`, workflow `ci.yml`, environment `npm`,
+   and under "Allowed actions" allow direct publishing with `npm publish`. (npm now creates new trusted
+   publishers allowing only `npm stage publish`, which holds each version for approval on npmjs.com; the
+   workflow publishes directly, after the `npm` environment's approval.) With npm 11.15+, per package:
+   `npm trust github <package> --repo davidgtonge/worker-shared-cache --file ci.yml --env npm --allow-publish`
+4. Delete the `NPM_TOKEN` secret and revoke the token on npmjs.com.
+5. On each package's Settings page, set Publishing access to **Require two-factor authentication and
+   disallow tokens**, so only this workflow (or you, with 2FA) can publish.
+
+npm generates [provenance](https://docs.npmjs.com/generating-provenance-statements), a signed record of the
+commit and workflow that built each package, automatically with trusted publishing, but only from a public
+repository. While this repository is private, packages publish without it.
 
 ## License
 

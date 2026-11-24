@@ -1,0 +1,21 @@
+# Weekly update PRs, grouped per ecosystem. For GitHub Actions these bump the pinned commit SHAs in
+# ci.yml along with their version comments.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ['*'] }
+
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      npm: { patterns: ['*'] }
+
+  - package-ecosystem: cargo
+    directory: /native
+    schedule: { interval: weekly }
+    groups:
+      cargo: { patterns: ['*'] }

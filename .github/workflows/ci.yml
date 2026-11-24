@@ -7,6 +7,7 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Every job is read-only unless it says otherwise; only `publish` gets more (an OIDC token for npm).
 permissions:
   contents: read
 
@@ -14,16 +15,28 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
+# Supply-chain notes:
+# - Actions are pinned to full commit SHAs (the comment gives the release), so a moved or hijacked tag
+#   can't change what runs here. Dependabot (.github/dependabot.yml) proposes updates.
+# - Container images are pinned by digest for the same reason. To refresh one:
+#   docker buildx imagetools inspect node:22-alpine --format '{{json .Manifest.Digest}}'
+# - Tag builds, whose binaries get published, never restore a cache, so a cache written by another run
+#   can't leak into a release.
+
+env:
+  RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
 jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22, cache: npm }
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: 'rustfmt, clippy' }
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master, 2026-11
+        with: { toolchain: stable, components: 'rustfmt, clippy' }
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with: { workspaces: native }
       - run: npm ci
       - run: npm run lint
@@ -31,12 +44,14 @@ jobs:
   coverage:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: 22, cache: npm }
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: llvm-tools }
-      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master, 2026-11
+        with: { toolchain: stable, components: llvm-tools }
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
+        with: { tool: cargo-llvm-cov }
       - run: npm ci
       - run: npm run build
       - run: npm run coverage
@@ -54,20 +69,32 @@ jobs:
           - { target: aarch64-apple-darwin, os: macos-15 }
           - { target: x86_64-apple-darwin, os: macos-15-intel }
           - { target: x86_64-pc-windows-msvc, os: windows-2025 }
-          - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, image: 'node:22-bullseye' }
-          - { target: aarch64-unknown-linux-gnu, os: ubuntu-24.04-arm, image: 'node:22-bullseye' }
-          - { target: x86_64-unknown-linux-musl, os: ubuntu-24.04, image: 'node:22-alpine' }
-          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, image: 'node:22-alpine' }
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+            image: node:22-bullseye@sha256:959fa6e5c12f4b08f58808f953c7a6a05f1f72629b57ef3a648b8809362fdad9
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            image: node:22-bullseye@sha256:959fa6e5c12f4b08f58808f953c7a6a05f1f72629b57ef3a648b8809362fdad9
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+            image: node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            image: node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
 
       - if: ${{ !matrix.image }}
-        uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm }
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: ${{ env.RELEASE != 'true' && 'npm' || '' }}
       - if: ${{ !matrix.image }}
-        uses: dtolnay/rust-toolchain@stable
-      - if: ${{ !matrix.image }}
-        uses: Swatinem/rust-cache@v2
+        uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master, 2026-11
+        with: { toolchain: stable }
+      - if: ${{ !matrix.image && env.RELEASE != 'true' }}
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with: { workspaces: native, key: '${{ matrix.target }}' }
       - if: ${{ !matrix.image }}
         name: Build and test
@@ -77,12 +104,12 @@ jobs:
           npm run build
           npm test
 
+      # musl targets default to a static C runtime, which can't produce the shared library Node loads.
+      # napi assumes a musl arm64 target is cross-compiled and asks for a cross linker by that name;
+      # building natively, the container's own gcc is the right one, so it is linked under that name.
+      # (The script below is single-quoted for sh, so it must not contain an apostrophe.)
       - if: ${{ matrix.image }}
         name: Build and test in ${{ matrix.image }}
-        # musl targets default to a static C runtime, which can't produce the shared library Node loads.
-        # napi assumes a musl arm64 target is cross-compiled and asks for a cross linker by that name;
-        # building natively, the container's own gcc is the right one, so it is linked under that name.
-        # (The script below is single-quoted for sh, so it must not contain an apostrophe.)
         run: |
           docker run --rm -v "$PWD:/work" -w /work \
             -e RUSTFLAGS='${{ contains(matrix.target, 'musl') && '-C target-feature=-crt-static' || '' }}' \
@@ -91,7 +118,7 @@ jobs:
               if [ "${{ matrix.target }}" = aarch64-unknown-linux-musl ]; then
                 ln -s "$(command -v gcc)" /usr/local/bin/aarch64-linux-musl-gcc
               fi
-              curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+              curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
               . "$HOME/.cargo/env"
               npm ci
               npm run build
@@ -101,7 +128,7 @@ jobs:
         name: Report the newest glibc symbol the binary needs
         run: objdump -T lib/*.node | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bindings-${{ matrix.target }}
           path: lib/*.node
@@ -115,42 +142,88 @@ jobs:
       matrix:
         node: [22, 24, latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '${{ matrix.node }}', cache: npm }
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master, 2026-11
+        with: { toolchain: stable }
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with: { workspaces: native }
       - run: npm ci
       - run: npm run build
       - run: npm test
 
-  # Runs only for a pushed tag like v0.2.0, after everything above passes. Needs an NPM_TOKEN secret with
-  # publish rights. Each platform package is published first, then the main package that depends on them.
-  publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [lint, coverage, build, node-versions]
+  # Assembles exactly what a release would publish, on every run, without publishing: each binary moved
+  # into its npm/<platform> package, then napi's and npm's own checks in dry-run mode. A broken release
+  # shows up here, not halfway through publishing a tag.
+  package:
+    needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, registry-url: 'https://registry.npmjs.org' }
-      - run: npm ci
-      # lib/binding.js is committed, so compiling src/index.ts needs no Rust build here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 24, package-manager-cache: false }
+      - run: npm ci --ignore-scripts
+      - run: npm run build:ts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { pattern: 'bindings-*', path: artifacts, merge-multiple: true }
+      - run: npx napi artifacts --output-dir artifacts --npm-dir npm
+      - run: npx napi pre-publish --npm-dir npm --tag-style npm --dry-run
+      - name: Pack every package
+        run: |
+          for dir in npm/*/; do (cd "$dir" && npm pack --dry-run); done
+          npm pack --dry-run
+
+  # Runs only for a pushed tag like v0.2.0, after everything above passes, and only once someone approves
+  # the `npm` environment (Settings > Environments). Authenticates with npm trusted publishing: GitHub
+  # issues a short-lived OIDC token that npm accepts for packages that name this workflow and environment
+  # as their trusted publisher, so no long-lived npm token exists. For the very first release, before the
+  # packages exist on npm and can name a trusted publisher, an NPM_TOKEN secret is used if one is set;
+  # delete it afterwards. See "Releasing" in the README.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, coverage, build, node-versions, package]
+    runs-on: ubuntu-24.04
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/worker-shared-cache
+    permissions:
+      contents: read
+      id-token: write # the OIDC token npm trusted publishing (and provenance) needs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # No cache, and no registry-url: that option writes an .npmrc whose token placeholder can stop npm
+      # from trying OIDC.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 24, package-manager-cache: false }
+      - name: Check npm is new enough for trusted publishing (11.5.1+)
+        run: |
+          npm --version
+          node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)" "$(npm --version)" \
+            || { echo "::error::npm $(npm --version) is too old for trusted publishing"; exit 1; }
+      # --ignore-scripts: no dependency gets to run code in the job that can publish.
+      - run: npm ci --ignore-scripts
       - run: npm run build:ts
       - name: Check the tag matches package.json
         run: |
           version="v$(node -p "require('./package.json').version")"
-          [ "$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but package.json is $version"; exit 1; }
-      - uses: actions/download-artifact@v4
-        with: { pattern: 'bindings-*', path: artifacts }
+          [ "$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME but package.json is $version"; exit 1; }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { pattern: 'bindings-*', path: artifacts, merge-multiple: true }
       - name: Move each binary into its platform package
         run: npx napi artifacts --output-dir artifacts --npm-dir npm
-      - name: Check every platform package has its binary
-        run: for dir in npm/*/; do ls "$dir"*.node; done
+      - name: Use the bootstrap token, if set (first release only)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+            echo "::warning::Publishing with the NPM_TOKEN secret. Once these packages name this workflow as their trusted publisher, delete the secret."
+          fi
       - name: Publish the platform packages, then the main package
         run: |
           npx napi pre-publish --npm-dir npm --tag-style npm
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
