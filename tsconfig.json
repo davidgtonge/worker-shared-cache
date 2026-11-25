@@ -3,6 +3,8 @@
   // source import './binding.js' as if it already sat there.
   "compilerOptions": {
     "target": "ES2022",
+    // isWellFormed and ArrayBuffer.detached are ES2024; Node 22 has both.
+    "lib": ["ES2022", "ES2024.String", "ES2024.ArrayBuffer"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "rootDir": "src",

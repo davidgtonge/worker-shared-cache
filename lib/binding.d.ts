@@ -27,6 +27,7 @@ export interface CacheOptions {
   estimatedEntryBytes?: number
 }
 
+/** Invalid options fail with `Status::InvalidArg`, which `src/index.ts` rethrows as a `RangeError`. */
 export declare function openCache(name: string, maxBytes: number, options?: CacheOptions | undefined | null): NativeCache
 
 export interface Stats {

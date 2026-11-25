@@ -41,17 +41,28 @@ cache.getBuffer('thumb:1')           // <Buffer 89 50 4e 47 ...>
 cache.stats() // { entries, bytes, hits, misses }
 ```
 
-Calling `openCache` with the same name from any thread returns the same cache. Reopening it with a
-different `maxBytes` or options throws. Keys must be strings; wrong-typed arguments and unknown options
-throw a `TypeError`.
+Calling `openCache` with the same name from any thread returns the same cache. Open it by name in each
+thread that uses it: a cache object can't be sent to another thread (`postMessage` throws). Caches are
+per process, so `cluster` workers and child processes each have their own.
+
+Reopening a name with a different `maxBytes` or options that change the outcome throws (`shards: 30` and
+`shards: 32` both give 32 shards, so they match). If threads open a new name at the same moment with
+conflicting options, whichever gets there first wins, so give every opener the same options.
+
+Keys must be strings with no lone surrogates (unpaired halves of an emoji, say): those can't be stored
+exactly, so they'd collide with other keys, and are rejected instead. Arguments of the wrong type and
+unknown options throw a `TypeError`; out-of-range options throw a `RangeError`.
+
+`maxBytes` approximates memory: each entry counts its key and value bytes plus 192 bytes for the cache's
+own bookkeeping. Measured use is about 1.1–1.4× `maxBytes` once full, the rest being allocator rounding.
 
 ### Options
 
 ```js
 openCache('images', 512 * 1024 * 1024, {
-  shards: 8,                 // 1 to 65536; default: CPU count × 4, rounded up to a power of two (see Shards)
+  shards: 8,                 // 1 to 65536, rounded up to a power of two; default: 64 (see Shards)
   hotAllocation: 0.97,       // default: 0.97
-  estimatedEntryBytes: 64e3, // default: 1024; only sizes internal tables
+  estimatedEntryBytes: 64e3, // typical key + value bytes; default: 1024 (see Shards)
 })
 ```
 
@@ -75,18 +86,19 @@ shard, picked by hashing the key, so keys spread evenly across them. Each shard 
   room. With keys spread evenly this evens out, so the cache as a whole stays close to `maxBytes`.
 - **its own eviction**, as described above, over just its keys.
 
-The number of shards is fixed when the cache opens. By default it is 4 per CPU core, rounded up to a power
-of two: 64 on a 10- or 16-core machine. `shards` overrides it (also rounded up to a power of two), and a cache
-too small to give every shard about 32 entries (judged by `estimatedEntryBytes`) gets fewer.
-`cache.shards` reports the number in use.
+The number of shards is fixed when the cache opens: 64 by default, the same on every machine, so a cache
+accepts the same entries in development and production. `shards` overrides it (rounded up to a power of
+two). A cache too small to give every shard room for about 32 entries of `estimatedEntryBytes` gets fewer
+shards, which also raises `maxEntryBytes`. `cache.shards` reports the number in use.
 
 **The catch: one entry must fit in one shard.** An entry (key + value) can be at most about
-`maxBytes / shards`; `cache.maxEntryBytes` gives the exact figure (a shard's `hotAllocation`). `set` and
-`setBuffer` throw a `RangeError` for anything bigger, and drop any older value under that key.
+`maxBytes / shards`; `cache.maxEntryBytes` gives the exact figure (a shard's `hotAllocation`, less the
+192-byte bookkeeping allowance). `set` and `setBuffer` throw a `RangeError` for anything bigger, and drop
+any older value under that key. A `maxBytes` too small for any entry is a `RangeError` when opening.
 
 | `maxBytes` | `shards` | `maxEntryBytes` (about) |
 |---|---|---|
-| 64 MB | 64 (default, 10–16 cores) | 1 MB |
+| 64 MB | 64 (default) | 1 MB |
 | 64 MB | 8 | 8 MB |
 | 512 MB | 64 | 8 MB |
 | 512 MB | 16 | 32 MB |
@@ -104,8 +116,9 @@ too small to give every shard about 32 entries (judged by `estimatedEntryBytes`)
   string `JSON.parse` needs straight from the cached bytes, skipping the Buffer that dominates a raw read,
   so it costs little more than `JSON.parse` itself. `set` throws for values with no JSON form
   (`undefined`, functions, `BigInt`), and `get` returns `undefined` on a miss, so a stored `null` stays `null`.
-- `getBuffer` / `setBuffer` store bytes untouched. Use them for binary data or your own encoding, such as
-  `v8.serialize` when values hold `Date`, `Map`, `Set` or `BigInt`.
+- `getBuffer` / `setBuffer` store bytes untouched: exactly the bytes a Buffer, typed array or DataView
+  views. A view of a transferred (detached) ArrayBuffer is rejected. Use them for binary data or your own
+  encoding, such as `v8.serialize` when values hold `Date`, `Map`, `Set` or `BigInt`.
 
 Both views share one store: `getBuffer` on a key written by `set` returns its UTF-8 JSON, and `get` on a key
 written by `setBuffer` parses the bytes as JSON.

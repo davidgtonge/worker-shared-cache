@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use napi::bindgen_prelude::{Buffer, BufferSlice};
-use napi::{Env, Error, JsString, Result};
+use napi::{Env, Error, JsString, Result, Status};
 use napi_derive::napi;
 
 use crate::config::Config;
-use crate::registry;
+use crate::registry::{self, OpenError};
 use crate::store::Store;
 
 #[napi(object)]
@@ -31,14 +31,19 @@ pub struct Stats {
 #[napi]
 pub struct NativeCache(Arc<Store>);
 
+/// Invalid options fail with `Status::InvalidArg`, which `src/index.ts` rethrows as a `RangeError`.
 #[napi]
 pub fn open_cache(name: String, max_bytes: f64, options: Option<CacheOptions>) -> Result<NativeCache> {
+    let invalid = |message| Error::new(Status::InvalidArg, message);
     let options =
         options.unwrap_or(CacheOptions { shards: None, hot_allocation: None, estimated_entry_bytes: None });
     let config =
         Config::new(max_bytes, options.shards, options.hot_allocation, options.estimated_entry_bytes)
-            .map_err(Error::from_reason)?;
-    registry::open(name, config).map(NativeCache).map_err(Error::from_reason)
+            .map_err(invalid)?;
+    registry::open(name, &config).map(NativeCache).map_err(|error| match error {
+        OpenError::Invalid(message) => invalid(message),
+        OpenError::AlreadyOpen(message) => Error::from_reason(message),
+    })
 }
 
 // JS numbers are f64; every count here stays far below 2^53.
