@@ -1,6 +1,6 @@
 {
   "name": "worker-shared-cache",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "A byte-bounded cache per name, shared by every Node worker thread in the process",
   "author": "Dave Tonge",
   "license": "MIT",
