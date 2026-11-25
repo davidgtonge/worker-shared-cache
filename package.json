@@ -39,12 +39,14 @@
     "lint": "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --release -- -D warnings && tsc --noEmit",
     "bench": "node bench/bench.js",
     "bench:serialize": "node bench/serialize.js",
+    "bench:churn": "node --expose-gc bench/churn.js",
     "version": "napi version --npm-dir npm && npm run build && git add npm lib/binding.js lib/binding.d.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@napi-rs/cli": "^3.4.0",
     "@types/node": "^22.20.5",
+    "piscina": "^5.3.2",
     "typescript": "^5.9.3"
   },
   "keywords": [

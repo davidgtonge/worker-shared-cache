@@ -135,6 +135,7 @@ npm run bench                              # 1 KB values, 10k keys, 1s per case
 node bench/bench.js --value-bytes=64 --keys=100000 --seconds=2
 node bench/bench.js --workers=1,4,16,24         # pick the worker counts (default: 1, 2, 4, 8, CPU count)
 npm run bench:serialize                    # JSON vs v8.serialize for a 10-key object
+npm run bench:churn                        # memory over 2,400 short-lived workers (add -- --baseline)
 ```
 
 This prints single-thread throughput next to a plain `Map` baseline, then the combined throughput of 1..N
@@ -214,9 +215,18 @@ npm run coverage          # JS coverage (fails below 100%) and Rust coverage of 
   x64 and arm64 for both glibc (in Debian bullseye, so the binaries need only glibc 2.31) and musl (in Alpine).
   It also assembles and dry-runs the release.
 
-`test/stress.test.js` runs 24 workers against one small cache at once, mixing JSON and raw reads and writes
-with oversized writes, and checks every value read back is intact. Scale it with
-`STRESS_WORKERS=48 STRESS_OPS=100000 node --test test/stress.test.js`.
+The tests include the cases that matter most for a cache shared across threads:
+
+- `test/workers.test.js`: workers see each other's writes with the main thread never touching the cache,
+  report the same entries and bytes, and hold one copy of the data (64 MB written once, not per worker).
+- `test/lifecycle.test.js`: 1,000 short-lived workers with at most 24 alive, a third terminated mid-loop;
+  24 workers racing to open a new cache, with the same and with conflicting options; and a 24-thread
+  Piscina pool whose idle workers exit and are replaced. `LIFECYCLE_WORKERS=5000 npm test` runs more.
+- `test/stress.test.js`: 24 workers mixing JSON and raw reads and writes, and oversized writes, on one
+  small cache, checking every value read back. `STRESS_WORKERS=48 STRESS_OPS=100000` scales it.
+
+`npm run bench:churn` (and again with `-- --baseline`) compares memory over 2,400 short-lived workers with
+and without the addon, to show worker churn leaks nothing.
 
 ### Project layout
 
