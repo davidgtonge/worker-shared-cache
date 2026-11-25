@@ -13,6 +13,10 @@ updates:
     schedule: { interval: weekly }
     groups:
       npm: { patterns: ['*'] }
+    ignore:
+      # Types for the oldest supported Node (engines: >= 22), so code can't use newer APIs by accident.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: cargo
     directory: /native
