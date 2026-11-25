@@ -220,8 +220,9 @@ The tests include the cases that matter most for a cache shared across threads:
 - `test/workers.test.js`: workers see each other's writes with the main thread never touching the cache,
   report the same entries and bytes, and hold one copy of the data (64 MB written once, not per worker).
 - `test/lifecycle.test.js`: 1,000 short-lived workers with at most 24 alive, a third terminated mid-loop;
-  24 workers racing to open a new cache, with the same and with conflicting options; and a 24-thread
-  Piscina pool whose idle workers exit and are replaced. `LIFECYCLE_WORKERS=5000 npm test` runs more.
+  24 workers racing to open a new cache, with the same and with conflicting options; and 24-thread Piscina
+  pools started and destroyed in turn, with idle workers exiting mid-round. `LIFECYCLE_WORKERS=5000 npm test`
+  runs more.
 - `test/stress.test.js`: 24 workers mixing JSON and raw reads and writes, and oversized writes, on one
   small cache, checking every value read back. `STRESS_WORKERS=48 STRESS_OPS=100000` scales it.
 
